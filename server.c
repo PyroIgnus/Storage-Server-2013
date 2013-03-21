@@ -22,6 +22,7 @@
 #include "utils.h"
 #include "storage.h"
 #include <time.h>
+#include <sys/time.h>
 #define MAX_LISTENQUEUELEN 20	///< The maximum number of queued connections.
 #include "file.h"
 
@@ -39,7 +40,7 @@
  * @param cmdvalue The value received from the client.
  * @return Returns 0 on success, -1 otherwise.
  */
-int handle_command(int sock, char *cmd,struct config_params *params, struct table* head )
+int handle_command(int sock, char *cmd, struct config_params *params, struct table* head )
 {
 
 	char cmdidentify[20];
@@ -48,7 +49,10 @@ int handle_command(int sock, char *cmd,struct config_params *params, struct tabl
 	char cmdtable[MAX_TABLE_LEN];
 	char cmdkey[MAX_KEY_LEN];
 	char cmdvalue[MAX_VALUE_LEN];
+	char result[MAX_VALUE_LEN] = "";
 	int success = 0;
+	int maxKeys = 0;
+	char* arg;
 
 
 	sscanf(cmd,"%s",cmdidentify);
@@ -61,59 +65,240 @@ int handle_command(int sock, char *cmd,struct config_params *params, struct tabl
 		sscanf(cmd,"%*s %s %s",cmdusername,cmdpassword);
 		if (strcmp (cmdusername,params->username)!=0 || strcmp (cmdpassword,params->password)!=0){
 			//set the errno as well
+			sprintf (cmd, "-1");
 
-			return -1;
+			success = -1;
 		}
 	}
 	else if (strcmp (cmdidentify, "GET") == 0) {
 
 		struct timeval start_time, end_time;
         // Remember when the experiment started.
-		gettimeofday(&start_time);
+		gettimeofday(&start_time,NULL);
+		double t1=start_time.tv_sec+(start_time.tv_usec/1000000.0);
 
 		sscanf(cmd,"%*s %s %s",cmdtable,cmdkey);
-		success = getEntry(head, cmdtable, cmdkey);
-		//Error Entry not found
-		if (success == -1) {
-			errno_test=ERR_TABLE_NOT_FOUND;
-			return success;
-		}
-		else if (success == -2) {
-			errno_test=ERR_KEY_NOT_FOUND;
-			return success;
-		}
-		else
+		strcpy (result, getEntry(head, cmdtable, cmdkey));
+		success = atoi (result);
+		//Error -1 = Table not found, -2 = Key not found
+		if (success < 0) {
 			sprintf (cmd, "%d", success);
+		}
+		else {
+
+
+
+			//sprintf (cmd, "%[0-9a-zA-Z ,]", result);
+			sprintf (cmd, "%s", result);
+		}
 
 		// Get the time at the end of the experiment.
-		gettimeofday(&end_time);
+		gettimeofday(&end_time,NULL);
+		double t2=end_time.tv_sec+(end_time.tv_usec/1000000.0);
 
 		//get difference in time
-		//total_processing_time+=getdifftime(&start_time, &end_time);
+		double total_processing_time=t2-t1;
+
+
+
+		sprintf(buff, "The server processing time was %.6lf seconds.\n",total_processing_time);
+		if (LOGGING == 1) logger(stdout, buff);
+		else if (LOGGING == 2) logger(file, buff);
+
 
 		success = 0;
 	}
 	else if (strcmp (cmdidentify, "SET") == 0) {
 
 		struct timeval start_time, end_time;
-        // Remember when the experiment started.
-		gettimeofday(&start_time);
+        	// Remember when the experiment started.
+		gettimeofday(&start_time,NULL);
+		double t1=start_time.tv_sec+(start_time.tv_usec/1000000.0);
+//		sscanf(cmd,"%*s %s %s %s",cmdtable,cmdkey, cmdvalue);
+		arg = strtok (cmd, " ");
+		arg = strtok (NULL, " ");
+		strcpy (cmdtable, arg);
+		arg = strtok(NULL, " ");
+		strcpy (cmdkey, arg);
+		//Place the rest into cmdvalue.
+		arg = strtok(NULL, " ");
+		arg[strlen(arg)] = ' ';
+		strcpy (cmdvalue, arg);
 
-		sscanf(cmd,"%*s %s %s %s",cmdtable,cmdkey, cmdvalue);
+
+		//char *buff2;
+		//strcpy(buff2,cmdvalue);
 		success = setEntry(head, cmdtable, cmdkey, cmdvalue);
-		if(success==-1){
-			errno_test=ERR_TABLE_NOT_FOUND;
+		//Error -1 = Table not found, -2 = Wrong column format/Invalid param
+		if(success < 0){
+			sprintf (cmd, "%d", success);
 		}
 
 		// Get the time at the end of the experiment.
-		gettimeofday(&end_time);
+		gettimeofday(&end_time,NULL);
+		double t2=end_time.tv_sec+(end_time.tv_usec/1000000.0);
 
 		//get difference in time
-		//total_processing_time+=getdifftime(&start_time, &end_time);
+		double total_processing_time=t2-t1;
 
+
+		sprintf(buff,"The server processing time was %.6lf seconds.\n",total_processing_time);
+		if (LOGGING == 1) logger(stdout, buff);
+		else if (LOGGING == 2) logger(file, buff);
 	}
+	else if (strcmp (cmdidentify, "FILE") == 0) {
+		struct timeval start_time, end_time;
+		gettimeofday(&start_time,NULL);
+		double t1=start_time.tv_sec+(start_time.tv_usec/1000000.0);
 
-//	printf("The total processing time is %d.\n",total_processing_time);
+		sscanf(cmd,"%*s %s",cmdtable);
+		char TABLE[MAX_TABLE_LEN];
+		char KEY[MAX_KEY_LEN];
+		char TEMP[100];
+		char values[MAX_COLUMNS_PER_TABLE][MAX_VALUE_LEN];
+		char value[MAX_VALUE_LEN];
+		int status = 0;
+
+		strcpy(TABLE,cmdtable);
+
+		FILE *infile;
+		infile=fopen(cmdtable,"r");
+		sprintf(buff, "Opening file %s.\n", cmdtable);
+		if (LOGGING == 1) logger(stdout, buff);
+		else if (LOGGING == 2) logger(file, buff);
+		if (infile != NULL) {
+			while(fscanf(infile,"%s",&TEMP)!=EOF) {
+				if (strlen(TEMP)>19) {
+					memcpy( KEY, &TEMP, MAX_KEY_LEN - 1);
+					KEY[MAX_KEY_LEN - 1] = '\0';
+				}
+				else {
+					strcpy(KEY,TEMP);
+				}
+				fscanf(infile,"\t%s\t%s\t%s\n",&values[0], &values[1], &values[2]);
+
+
+				strcpy (value, "");
+				strcat (value, "testchar ");
+				strcat (value, trim(values[0]));
+				strcat (value, ", int1 ");
+				strcat (value, trim(values[1]));
+				strcat (value, ", int2 ");
+				strcat (value, trim(values[2]));
+
+
+				char *buff2;
+				strcpy(buff2,value);
+				success = setEntry(head, TABLE, KEY, buff2);
+
+
+				if (LOGGING != 0)
+					sprintf(buff, "stored for %s %s\n",KEY,value);
+				if (LOGGING == 1) logger(stdout, buff);
+				else if (LOGGING == 2) logger(file, buff);
+
+			}
+		}
+		else {
+			sprintf(buff,"File not opened successfully.\n");
+			if (LOGGING == 1) logger(stdout, buff);
+			else if (LOGGING == 2) logger(file, buff);
+			sprintf (cmd, "%d", success);
+		}
+
+
+//	Original M2 File Parser for workload testing.
+//		sscanf(cmd,"%*s %s",cmdtable);
+//		char TABLE[MAX_TABLE_LEN];
+//		char KEY[MAX_KEY_LEN];
+//		char TEMP[100];
+//		char value[MAX_VALUE_LEN];
+//		int status = 0;
+//
+//		strcpy(TABLE,cmdtable);
+//
+//		FILE *infile;
+//		infile=fopen(cmdtable,"r");
+//		sprintf(buff, "Opening file %s.\n", cmdtable);
+//		if (LOGGING == 1) logger(stdout, buff);
+//		else if (LOGGING == 2) logger(file, buff);
+//		if (infile != NULL) {
+//			while(fscanf(infile,"%s",&TEMP)!=EOF) {
+//				if (strlen(TEMP)>19) {
+//					memcpy( KEY, &TEMP, MAX_KEY_LEN - 1);
+//					KEY[MAX_KEY_LEN - 1] = '\0';
+//				}
+//				else {
+//					strcpy(KEY,TEMP);
+//				}
+//				fscanf(infile,"\t%s\n",&value);
+//
+//				success = setEntry(head, TABLE, KEY, value);
+//				if (LOGGING != 0)
+//					sprintf(buff, "stored for %s %s\n",KEY,value);
+//				if (LOGGING == 1) logger(stdout, buff);
+//				else if (LOGGING == 2) logger(file, buff);
+//
+//			}
+//		}
+//		else {
+//			sprintf(buff,"File not opened successfully.\n");
+//			if (LOGGING == 1) logger(stdout, buff);
+//			else if (LOGGING == 2) logger(file, buff);
+//			sprintf (cmd, "%d", success);
+//		}
+
+		// Get the time at the end of the experiment.
+		gettimeofday(&end_time,NULL);
+		double t2=end_time.tv_sec+(end_time.tv_usec/1000000.0);
+
+		//get difference in time
+		double total_processing_time=t2-t1;
+;
+		printf("The server processing time was %.6lf seconds.\n",total_processing_time);
+		sprintf(buff,"The server processing time was %.6lf seconds.\n",total_processing_time);
+		if (LOGGING == 1) logger(stdout, buff);
+		else if (LOGGING == 2) logger(file, buff);
+	}
+	else if (strcmp (cmdidentify, "QUERY") == 0) {
+		struct timeval start_time, end_time;
+        	// Remember when the experiment started.
+		gettimeofday(&start_time,NULL);
+		double t1=start_time.tv_sec+(start_time.tv_usec/1000000.0);
+
+		//sscanf(cmd,"%*s %s %d %s", cmdtable, maxKeys, cmdvalue);
+		arg = strtok (cmd, " ");
+		arg = strtok (NULL, " ");
+		strcpy (cmdtable, arg);
+		arg = strtok (NULL, " ");
+		maxKeys = atoi (arg);
+		//Place the rest into cmdvalue.
+		arg = strtok(NULL, " ");
+		arg[strlen(arg)] = ' ';
+		strcpy (cmdvalue, arg);
+
+		strcpy (cmd, query(head, cmdtable, cmdvalue, maxKeys));
+
+		if (atoi(cmd) >= 0)
+			sprintf (buff, "Keys found: %s\n", cmd);
+		else
+			sprintf (buff, "Sending Error Message: %d\n", atoi(cmd));
+		if (LOGGING == 1) logger(stdout, buff);
+		else if (LOGGING == 2) logger(file, buff);
+
+		// Get the time at the end of the experiment.
+		gettimeofday(&end_time,NULL);
+		double t2=end_time.tv_sec+(end_time.tv_usec/1000000.0);
+
+		//get difference in time
+		double total_processing_time=t2-t1;
+
+		//printf("The total time in client side is %.6lf seconds.\n",total_processing_time);
+		printf("The server processing time was %.6lf seconds.\n",total_processing_time);
+		sprintf(buff,"The server processing time was %.6lf seconds.\n",total_processing_time);
+		if (LOGGING == 1) logger(stdout, buff);
+		else if (LOGGING == 2) logger(file, buff);
+	}
 
 	// For now, just send back the command to the client.
 	sendall(sock, cmd, strlen(cmd));
@@ -149,7 +334,6 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 	char *config_file = argv[1];
-
 	// Read the config file.
 	struct config_params params;
 	//initialise the values for flags in params
@@ -168,18 +352,33 @@ int main(int argc, char *argv[])
 //	// Initialize the tables in database
 	struct table *head;
 	struct table *curr;
-
-
+	int i, j;
 
 	head=malloc(sizeof(struct table));
+	// Needs proper implementation from config parsing.
+	head->numCol = params.numCol[0];
+	head-> headIndex = -1;
+	head->numEntries = 0;
 	head->next=NULL;
 	strcpy(head->name,params.table_name[0]);
+	for (i = 0; i < head->numCol; i++) {
+		strcpy(head->col[i], params.col[0][i]);
+		head->type[i] = params.type[0][i];
+	}
 	curr=head;
-	int i, j;
 	for (i=1;i<params.tableIndex;i++){
 		curr->next=malloc(sizeof(struct table));
 		curr=curr->next;
+		curr-> headIndex = -1;
+		curr->numEntries = 0;
 		strcpy(curr->name,params.table_name[i]);
+		// Needs implementation of config parsing to determine a valid number.  For now set to 0.
+		curr->numCol = params.numCol[i];
+		for (j = 0; j < curr->numCol; j++) {
+			strcpy(curr->col[j], params.col[i][j]);
+			curr->type[j] = params.type[i][j];
+		}
+
 	}
 	//make the last node point to NULL
 	curr->next=NULL;
@@ -191,6 +390,8 @@ int main(int argc, char *argv[])
 	for (i = 0; i < numTables; i++) {
 		for (j = 0; j < MAX_RECORDS_PER_TABLE;j++) {
 			curr->entries[j] = malloc(sizeof(struct hashEntry));
+			curr->entries[j]->next = NULL;
+			curr->entries[j]->prev = NULL;
 			curr->entries[j]->deleted = -1;
 		}
 		curr = curr->next;
@@ -198,6 +399,91 @@ int main(int argc, char *argv[])
 	curr = head;
 
 
+
+
+// To test the table linked list
+
+//	while(curr!=NULL){
+//		printf("%s \n", curr->name);
+//		int i=curr->numCol;
+//		int j;
+//		for (j=0;j<i;j++){
+//			if (curr->type[j]==-1)
+//				printf("\tint %s ",curr->col[j]);
+//			else
+//				printf("\tchar[%d] %s",(int)curr->type[j],curr->col[j]);
+//			printf("\n");
+//		}
+////        printf("%s\n\n", curr->col[0]);
+//		curr=curr->next;
+//	}
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+
+	//Initial load of census workload
+
+	head->numCol = 1;
+
+	char TABLE[MAX_TABLE_LEN];
+	char KEY[MAX_KEY_LEN];
+	char TEMP[100];
+	char value[MAX_VALUE_LEN];
+	struct timeval start_time, end_time;
+
+	sprintf(buff, "Initializing workload.\n");
+	if (LOGGING == 1) logger(stdout, buff);
+	else if (LOGGING == 2) logger(file, buff);
+
+	strcpy(TABLE,"census");
+
+	FILE *infile;
+	infile=fopen("census","r");
+
+	// Remember when the experiment started.
+	gettimeofday(&start_time,NULL);
+	double t1=start_time.tv_sec+(start_time.tv_usec/1000000.0);
+
+	while(fscanf(infile,"%s",&TEMP)!=EOF) {
+		if (strlen(TEMP)>19) {
+			memcpy( KEY, &TEMP, MAX_KEY_LEN - 1);
+			KEY[MAX_KEY_LEN - 1] = '\0';
+		}
+		else {
+			strcpy(KEY,TEMP);
+		}
+		fscanf(infile,"\t%s\n",&value);
+
+		status = setEntry(head, TABLE, KEY, value);
+		if (LOGGING != 0)
+			sprintf(buff, "stored for %s %s\n",KEY,value);
+		if (LOGGING == 1) logger(stdout, buff);
+		else if (LOGGING == 2) logger(file, buff);
+
+	}
+
+	gettimeofday(&end_time,NULL);
+	double t2=end_time.tv_sec+(end_time.tv_usec/1000000.0);
+
+	//get difference in time
+	double total_processing_time=t2-t1;
+
+	printf ("The total time is %.6lf seconds.\n",total_processing_time);	
+	sprintf(buff, "The total time is %.6lf seconds.\n",total_processing_time);
+	if (LOGGING == 1) logger(stdout, buff);
+	else if (LOGGING == 2) logger(file, buff);
+
+*/
 
 
 	sprintf(buff,"Server on %s:%d\n", params.server_host, params.server_port);
@@ -271,8 +557,10 @@ int main(int argc, char *argv[])
 				// Either an error occurred or the client closed the connection.
 				wait_for_commands = 0;
 			} else {
-				// Handle the command from the client.
-				int status = handle_command(clientsock, cmd, &params, head);
+				if (!(cmd == NULL || strlen(cmd) < 2)) {
+					// Handle the command from the client.
+					int status = handle_command(clientsock, cmd, &params, head);
+				}
 				if (status != 0)
 					wait_for_commands = 0; // Oops.  An error occured.
 			}
@@ -288,6 +576,9 @@ int main(int argc, char *argv[])
 	// Stop listening for connections.
 	close(listensock);
 	fclose(file);
+	
+	// Free memory
+	freeTable (head);
 
 	return EXIT_SUCCESS;
 }

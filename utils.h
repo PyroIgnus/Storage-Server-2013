@@ -49,16 +49,23 @@ int errno_test;
  *
  * It is only enabled in debug builds.
  */
-// Structs for the hash table implementation
+// Structs for the hash table implementation (also acts as a circular linked list for all existing entries in a table.
 struct hashEntry {
-	/// Name
-	char name[MAX_KEY_LEN];
+	/// Key(name)
+	char key[MAX_KEY_LEN];
 
 	/// Value
-	char value[MAX_VALUE_LEN];
+	char value[MAX_COLUMNS_PER_TABLE][MAX_VALUE_LEN];
 
 	/// If equal to -1, then entry is deleted/unused.  Otherwise it exists.
 	int deleted;
+
+	// Index where entry is stored in hash table.
+	int index;
+
+	// Next entry and previous entry
+	struct hashEntry* next;
+	struct hashEntry* prev;
 
 };
 /**
@@ -69,11 +76,23 @@ struct table {
 	/// Table name
 	char name[MAX_TABLE_LEN];
 
-	/// Number of current entries
+	// Column names
+	char col[MAX_COLUMNS_PER_TABLE][MAX_COLNAME_LEN];
+
+	// Column types.  If the type is -1 then it is an int.  Else, the element should contain the max char length.
+	int type[MAX_COLUMNS_PER_TABLE];
+
+	// Number of current entries
 	int numEntries;
+
+	// Number of columns
+	int numCol;
 
 	/// Corresponding hash table
 	struct hashEntry* entries[MAX_RECORDS_PER_TABLE];
+
+	// Index of the "head" of the entry linked list.  If it is -1 then there is no current head.
+	int headIndex;
 
 	/// Next table
 	struct table* next;
@@ -82,11 +101,17 @@ struct table {
 
 // Functions for hash table implementation
 int hash (char* key);
-
-
 int probeIndex (int index, int origIndex);
-int getEntry (struct table* root, char* tableName, char* key);	// Change return value to account for -1 entry values
+char* getEntry (struct table* root, char* tableName, char* key);	// Change return value to account for -1 entry values
 int setEntry (struct table* root, char* tableName, char* key, char* value);
+char* query (struct table* root, char* tableName, char* predicates, int maxKeys);
+
+// Miscellaneous Helper Functions
+struct hashEntry* deleteEntry (struct hashEntry* entry, struct hashEntry* head);
+int insertEntry (struct hashEntry* entry, struct hashEntry* head);
+int checkPred (char* value, int op, char* opvalue, int type);
+void initKeys (char*** A, int r, int c);
+void freeTable (struct table* node);
 
 /**
  * @brief A struct to store config parameters.
@@ -117,6 +142,13 @@ struct config_params {
 	char table_name[MAX_TABLES][MAX_TABLE_LEN];
 	///table index
 	int tableIndex;
+	// Column names
+	char col[MAX_TABLES][MAX_COLUMNS_PER_TABLE][MAX_COLNAME_LEN];
+
+	// Column types.  If the type is -1 then it is an int.  Else, the element should contain the max char length.
+	int type[MAX_TABLES][MAX_COLUMNS_PER_TABLE];
+	// Number of columns
+	int numCol[MAX_TABLES];
 
 	/// The directory where tables are stored.
 	//	char data_directory[MAX_PATH_LEN];
@@ -181,17 +213,28 @@ void logger(FILE *file, char *message);
  * @return Returns encrypted password.
  */
 char *generate_encrypted_password(const char *passwd, const char *salt);
+
+/**
+ * @brief Checks if the string is valid or not.
+ *
+ * @param str The String that is being passed
+ * @param type The type of validation to be tested for.
+ * @return Returns 0 if string is valid, 1 if invalid.
+ */
+int my_strvalidate(char *str, int type);
+
+char* trim(char* str);
 /**
  * @brief get the current time
  */
-struct timeval *gettimeofday(struct timeval *currtime);     //get the current time
+//struct timeval *gettimeofday(struct timeval *currtime);     //get the current time
 /**
  * @brief print the difference of start and end time
  */
-void printdifftime(struct timeval *start_time, struct timeval *end_time);   // print the difference of start and end time
+//void printdifftime(struct timeval *start_time, struct timeval *end_time);   // print the difference of start and end time
 /**
  * @brief get the diff time
  */
-double getdifftime(struct timeval *start_time, struct timeval *end_time);     //get the diff time
+//double getdifftime(struct timeval *start_time, struct timeval *end_time);     //get the diff time
 
 #endif
