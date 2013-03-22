@@ -605,38 +605,43 @@ char* query (struct table* root, char* tableName, char* predicates, int maxKeys)
 	// Parse predicates here into colNames, operators and parsedValues in the order that you find them.  operators should be represented as stated above.
 	//char* delims;
 	char* arg;
+	char temp[100];
+	int c;
 
 	//strcpy(delims, " ");
-	arg = strtok (predicates, " ");
+	arg = strtok (predicates, ",");
 	if (arg == NULL) {
 		return "-2";	// Shouldn't have to ever execute this.
 	}
 	i = 0;
 
 	while (arg != NULL) {
+		j = strcspn (arg, "<=>");
+		if (j >= strlen (arg) - 2) {
+			return "-2";	// If operator is not found, return "-2".
+		}
+		strncpy (temp, arg, j);
+		temp[j] = '\0';
 		// Set column name
-		strcpy (colNames[i], trim(arg));
+		strcpy (colNames[i], trim(temp));	
 		// Set operators
-		arg = trim(strtok (NULL, " "));
-		if (strcmp (arg, "<") == 0)
+		c = (int)arg[j];
+		if (c == (int)'<')
 			operators[i] = -1;
-		else if (strcmp (arg, "=") == 0)
+		else if (c == (int)'=')
 			operators[i] = 0;
-		else if (strcmp (arg, ">") == 0)
+		else if (c == (int)'>')
 			operators[i] = 1;
-		else
+		else {
 			return "-2";	// Not an acceptable operator.
-
-		//strcpy(delims, ",");
+		}
 		// Set values
-		arg = strtok (NULL, ",");
-		strcpy (arg, trim(arg));
-		strcpy (parsedValues[i], arg);
+		arg = arg + j + 1;
+		strcpy (parsedValues[i], trim(arg));
 		// Increment and set up for next set of predicates
 		i += 1;
 		numCols += 1;
-		//strcpy(delims, " ");
-		arg = strtok (NULL, " ");
+		arg = strtok (NULL, ",");
 	}
 
 	// Loop through all existing tables.
