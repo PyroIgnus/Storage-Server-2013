@@ -52,7 +52,6 @@ int handle_command(int sock, char *cmd, struct config_params *params, struct tab
 	char result[MAX_VALUE_LEN] = "";
 	int success = 0;
 	int maxKeys = 0;
-	char* arg;
 
 
 	sscanf(cmd,"%s",cmdidentify);
@@ -85,10 +84,6 @@ int handle_command(int sock, char *cmd, struct config_params *params, struct tab
 			sprintf (cmd, "%d", success);
 		}
 		else {
-
-
-
-			//sprintf (cmd, "%[0-9a-zA-Z ,]", result);
 			sprintf (cmd, "%s", result);
 		}
 
@@ -101,7 +96,7 @@ int handle_command(int sock, char *cmd, struct config_params *params, struct tab
 
 
 
-		sprintf(buff, "The server processing time was %.6lf seconds.\n",total_processing_time);
+		sprintf(buff, "The total time is %.6lf seconds.\n",total_processing_time);
 		if (LOGGING == 1) logger(stdout, buff);
 		else if (LOGGING == 2) logger(file, buff);
 
@@ -114,20 +109,8 @@ int handle_command(int sock, char *cmd, struct config_params *params, struct tab
         	// Remember when the experiment started.
 		gettimeofday(&start_time,NULL);
 		double t1=start_time.tv_sec+(start_time.tv_usec/1000000.0);
-//		sscanf(cmd,"%*s %s %s %s",cmdtable,cmdkey, cmdvalue);
-		arg = strtok (cmd, " ");
-		arg = strtok (NULL, " ");
-		strcpy (cmdtable, arg);
-		arg = strtok(NULL, " ");
-		strcpy (cmdkey, arg);
-		//Place the rest into cmdvalue.
-		arg = strtok(NULL, " ");
-		arg[strlen(arg)] = ' ';
-		strcpy (cmdvalue, arg);
 
-
-		//char *buff2;
-		//strcpy(buff2,cmdvalue);
+		sscanf(cmd,"%*s %s %s %s",cmdtable,cmdkey, cmdvalue);
 		success = setEntry(head, cmdtable, cmdkey, cmdvalue);
 		//Error -1 = Table not found, -2 = Wrong column format/Invalid param
 		if(success < 0){
@@ -142,7 +125,7 @@ int handle_command(int sock, char *cmd, struct config_params *params, struct tab
 		double total_processing_time=t2-t1;
 
 
-		sprintf(buff,"The server processing time was %.6lf seconds.\n",total_processing_time);
+		sprintf(buff,"The total time is %.6lf seconds.\n",total_processing_time);
 		if (LOGGING == 1) logger(stdout, buff);
 		else if (LOGGING == 2) logger(file, buff);
 	}
@@ -155,7 +138,6 @@ int handle_command(int sock, char *cmd, struct config_params *params, struct tab
 		char TABLE[MAX_TABLE_LEN];
 		char KEY[MAX_KEY_LEN];
 		char TEMP[100];
-		char values[MAX_COLUMNS_PER_TABLE][MAX_VALUE_LEN];
 		char value[MAX_VALUE_LEN];
 		int status = 0;
 
@@ -175,23 +157,9 @@ int handle_command(int sock, char *cmd, struct config_params *params, struct tab
 				else {
 					strcpy(KEY,TEMP);
 				}
-				fscanf(infile,"\t%s\t%s\t%s\n",&values[0], &values[1], &values[2]);
+				fscanf(infile,"\t%s\n",&value);
 
-
-				strcpy (value, "");
-				strcat (value, "testchar ");
-				strcat (value, trim(values[0]));
-				strcat (value, ", int1 ");
-				strcat (value, trim(values[1]));
-				strcat (value, ", int2 ");
-				strcat (value, trim(values[2]));
-
-
-				char *buff2;
-				strcpy(buff2,value);
-				success = setEntry(head, TABLE, KEY, buff2);
-
-
+				success = setEntry(head, TABLE, KEY, value);
 				if (LOGGING != 0)
 					sprintf(buff, "stored for %s %s\n",KEY,value);
 				if (LOGGING == 1) logger(stdout, buff);
@@ -206,57 +174,15 @@ int handle_command(int sock, char *cmd, struct config_params *params, struct tab
 			sprintf (cmd, "%d", success);
 		}
 
-
-//	Original M2 File Parser for workload testing.
-//		sscanf(cmd,"%*s %s",cmdtable);
-//		char TABLE[MAX_TABLE_LEN];
-//		char KEY[MAX_KEY_LEN];
-//		char TEMP[100];
-//		char value[MAX_VALUE_LEN];
-//		int status = 0;
-//
-//		strcpy(TABLE,cmdtable);
-//
-//		FILE *infile;
-//		infile=fopen(cmdtable,"r");
-//		sprintf(buff, "Opening file %s.\n", cmdtable);
-//		if (LOGGING == 1) logger(stdout, buff);
-//		else if (LOGGING == 2) logger(file, buff);
-//		if (infile != NULL) {
-//			while(fscanf(infile,"%s",&TEMP)!=EOF) {
-//				if (strlen(TEMP)>19) {
-//					memcpy( KEY, &TEMP, MAX_KEY_LEN - 1);
-//					KEY[MAX_KEY_LEN - 1] = '\0';
-//				}
-//				else {
-//					strcpy(KEY,TEMP);
-//				}
-//				fscanf(infile,"\t%s\n",&value);
-//
-//				success = setEntry(head, TABLE, KEY, value);
-//				if (LOGGING != 0)
-//					sprintf(buff, "stored for %s %s\n",KEY,value);
-//				if (LOGGING == 1) logger(stdout, buff);
-//				else if (LOGGING == 2) logger(file, buff);
-//
-//			}
-//		}
-//		else {
-//			sprintf(buff,"File not opened successfully.\n");
-//			if (LOGGING == 1) logger(stdout, buff);
-//			else if (LOGGING == 2) logger(file, buff);
-//			sprintf (cmd, "%d", success);
-//		}
-
 		// Get the time at the end of the experiment.
 		gettimeofday(&end_time,NULL);
 		double t2=end_time.tv_sec+(end_time.tv_usec/1000000.0);
 
 		//get difference in time
 		double total_processing_time=t2-t1;
-;
-		printf("The server processing time was %.6lf seconds.\n",total_processing_time);
-		sprintf(buff,"The server processing time was %.6lf seconds.\n",total_processing_time);
+
+		printf("The total time in client side is %.6lf seconds.\n",total_processing_time);
+		sprintf(buff,"The total time is %.6lf seconds.\n",total_processing_time);
 		if (LOGGING == 1) logger(stdout, buff);
 		else if (LOGGING == 2) logger(file, buff);
 	}
@@ -266,25 +192,8 @@ int handle_command(int sock, char *cmd, struct config_params *params, struct tab
 		gettimeofday(&start_time,NULL);
 		double t1=start_time.tv_sec+(start_time.tv_usec/1000000.0);
 
-		//sscanf(cmd,"%*s %s %d %s", cmdtable, maxKeys, cmdvalue);
-		arg = strtok (cmd, " ");
-		arg = strtok (NULL, " ");
-		strcpy (cmdtable, arg);
-		arg = strtok (NULL, " ");
-		maxKeys = atoi (arg);
-		//Place the rest into cmdvalue.
-		arg = strtok(NULL, " ");
-		arg[strlen(arg)] = ' ';
-		strcpy (cmdvalue, arg);
-
-		strcpy (cmd, query(head, cmdtable, cmdvalue, maxKeys));
-
-		if (atoi(cmd) >= 0)
-			sprintf (buff, "Keys found: %s\n", cmd);
-		else
-			sprintf (buff, "Sending Error Message: %d\n", atoi(cmd));
-		if (LOGGING == 1) logger(stdout, buff);
-		else if (LOGGING == 2) logger(file, buff);
+		sscanf(cmd,"%*s %s %s %d", cmdtable, cmdvalue, maxKeys);
+		strcpy (result, query(head, cmdtable, cmdvalue, maxKeys));
 
 		// Get the time at the end of the experiment.
 		gettimeofday(&end_time,NULL);
@@ -293,9 +202,8 @@ int handle_command(int sock, char *cmd, struct config_params *params, struct tab
 		//get difference in time
 		double total_processing_time=t2-t1;
 
-		//printf("The total time in client side is %.6lf seconds.\n",total_processing_time);
-		printf("The server processing time was %.6lf seconds.\n",total_processing_time);
-		sprintf(buff,"The server processing time was %.6lf seconds.\n",total_processing_time);
+		printf("The total time in client side is %.6lf seconds.\n",total_processing_time);
+		sprintf(buff,"The total time is %.6lf seconds.\n",total_processing_time);
 		if (LOGGING == 1) logger(stdout, buff);
 		else if (LOGGING == 2) logger(file, buff);
 	}
@@ -352,20 +260,17 @@ int main(int argc, char *argv[])
 //	// Initialize the tables in database
 	struct table *head;
 	struct table *curr;
-	int i, j;
+
 
 	head=malloc(sizeof(struct table));
 	// Needs proper implementation from config parsing.
-	head->numCol = params.numCol[0];
+	head->numCol = 0;
 	head-> headIndex = -1;
 	head->numEntries = 0;
 	head->next=NULL;
 	strcpy(head->name,params.table_name[0]);
-	for (i = 0; i < head->numCol; i++) {
-		strcpy(head->col[i], params.col[0][i]);
-		head->type[i] = params.type[0][i];
-	}
 	curr=head;
+	int i, j;
 	for (i=1;i<params.tableIndex;i++){
 		curr->next=malloc(sizeof(struct table));
 		curr=curr->next;
@@ -373,12 +278,7 @@ int main(int argc, char *argv[])
 		curr->numEntries = 0;
 		strcpy(curr->name,params.table_name[i]);
 		// Needs implementation of config parsing to determine a valid number.  For now set to 0.
-		curr->numCol = params.numCol[i];
-		for (j = 0; j < curr->numCol; j++) {
-			strcpy(curr->col[j], params.col[i][j]);
-			curr->type[j] = params.type[i][j];
-		}
-
+		curr->numCol = 0;
 	}
 	//make the last node point to NULL
 	curr->next=NULL;
@@ -390,44 +290,13 @@ int main(int argc, char *argv[])
 	for (i = 0; i < numTables; i++) {
 		for (j = 0; j < MAX_RECORDS_PER_TABLE;j++) {
 			curr->entries[j] = malloc(sizeof(struct hashEntry));
-			curr->entries[j]->next = NULL;
-			curr->entries[j]->prev = NULL;
+			curr->entries[j]->next = malloc(sizeof(struct hashEntry));
+			curr->entries[j]->prev = malloc(sizeof(struct hashEntry));
 			curr->entries[j]->deleted = -1;
 		}
 		curr = curr->next;
 	}
 	curr = head;
-
-
-
-
-// To test the table linked list
-
-//	while(curr!=NULL){
-//		printf("%s \n", curr->name);
-//		int i=curr->numCol;
-//		int j;
-//		for (j=0;j<i;j++){
-//			if (curr->type[j]==-1)
-//				printf("\tint %s ",curr->col[j]);
-//			else
-//				printf("\tchar[%d] %s",(int)curr->type[j],curr->col[j]);
-//			printf("\n");
-//		}
-////        printf("%s\n\n", curr->col[0]);
-//		curr=curr->next;
-//	}
-
-
-
-
-
-
-
-
-
-
-
 
 /*
 
@@ -557,10 +426,8 @@ int main(int argc, char *argv[])
 				// Either an error occurred or the client closed the connection.
 				wait_for_commands = 0;
 			} else {
-				if (!(cmd == NULL || strlen(cmd) < 2)) {
-					// Handle the command from the client.
-					int status = handle_command(clientsock, cmd, &params, head);
-				}
+				// Handle the command from the client.
+				int status = handle_command(clientsock, cmd, &params, head);
 				if (status != 0)
 					wait_for_commands = 0; // Oops.  An error occured.
 			}

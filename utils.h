@@ -60,9 +60,6 @@ struct hashEntry {
 	/// If equal to -1, then entry is deleted/unused.  Otherwise it exists.
 	int deleted;
 
-	// Index where entry is stored in hash table.
-	int index;
-
 	// Next entry and previous entry
 	struct hashEntry* next;
 	struct hashEntry* prev;
@@ -78,9 +75,6 @@ struct table {
 
 	// Column names
 	char col[MAX_COLUMNS_PER_TABLE][MAX_COLNAME_LEN];
-
-	// Column types.  If the type is -1 then it is an int.  Else, the element should contain the max char length.
-	int type[MAX_COLUMNS_PER_TABLE];
 
 	// Number of current entries
 	int numEntries;
@@ -107,10 +101,9 @@ int setEntry (struct table* root, char* tableName, char* key, char* value);
 char* query (struct table* root, char* tableName, char* predicates, int maxKeys);
 
 // Miscellaneous Helper Functions
-struct hashEntry* deleteEntry (struct hashEntry* entry, struct hashEntry* head);
+int deleteEntry (struct hashEntry* entry, struct hashEntry* head);
 int insertEntry (struct hashEntry* entry, struct hashEntry* head);
-int checkPred (char* value, int op, char* opvalue, int type);
-void initKeys (char*** A, int r, int c);
+int checkPred (char* value, int op, char* opvalue);
 void freeTable (struct table* node);
 
 /**
@@ -142,13 +135,6 @@ struct config_params {
 	char table_name[MAX_TABLES][MAX_TABLE_LEN];
 	///table index
 	int tableIndex;
-	// Column names
-	char col[MAX_TABLES][MAX_COLUMNS_PER_TABLE][MAX_COLNAME_LEN];
-
-	// Column types.  If the type is -1 then it is an int.  Else, the element should contain the max char length.
-	int type[MAX_TABLES][MAX_COLUMNS_PER_TABLE];
-	// Number of columns
-	int numCol[MAX_TABLES];
 
 	/// The directory where tables are stored.
 	//	char data_directory[MAX_PATH_LEN];
@@ -222,8 +208,6 @@ char *generate_encrypted_password(const char *passwd, const char *salt);
  * @return Returns 0 if string is valid, 1 if invalid.
  */
 int my_strvalidate(char *str, int type);
-
-char* trim(char* str);
 /**
  * @brief get the current time
  */
