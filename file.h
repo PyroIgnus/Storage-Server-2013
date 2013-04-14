@@ -13,7 +13,8 @@
 ///when 2, the data gets output on a filestream. No data is outputted in case it is 0
 /// Create a socket.ocpublicket connected to the client.
 
-#define LOGGING 0
+#define LOGGING  0
+#define TESTING 0
 ///this is the filestream that would be used by server and client
 FILE *file;
 

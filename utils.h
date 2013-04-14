@@ -10,6 +10,9 @@
 #include <stdio.h>
 #include "storage.h"
 #include <time.h>
+#include <pthread.h>
+
+extern pthread_mutex_t lock;
 /**
  * @brief Any lines in the config file that start with this character 
  * are treated as comments.
@@ -44,6 +47,7 @@ int errno_test;
 #else
 #define DBG(x)  {printf x; fflush(stdout);}
 #endif
+
 /**
  * @brief Structs for the hash table implementation.
  *
@@ -60,6 +64,12 @@ struct hashEntry {
 	/// If equal to -1, then entry is deleted/unused.  Otherwise it exists.
 	int deleted;
 
+	// Index where entry is stored in hash table.
+	int index;
+
+	// Counter for transactions
+	int transac_count;
+
 	// Next entry and previous entry
 	struct hashEntry* next;
 	struct hashEntry* prev;
@@ -75,6 +85,9 @@ struct table {
 
 	// Column names
 	char col[MAX_COLUMNS_PER_TABLE][MAX_COLNAME_LEN];
+
+	// Column types.  If the type is -1 then it is an int.  Else, the element should contain the max char length.
+	int type[MAX_COLUMNS_PER_TABLE];
 
 	// Number of current entries
 	int numEntries;
@@ -97,13 +110,14 @@ struct table {
 int hash (char* key);
 int probeIndex (int index, int origIndex);
 char* getEntry (struct table* root, char* tableName, char* key);	// Change return value to account for -1 entry values
-int setEntry (struct table* root, char* tableName, char* key, char* value);
+int setEntry (struct table* root, char* tableName, char* key, char* value, char* datapath, int writeEn, int transac_id);
 char* query (struct table* root, char* tableName, char* predicates, int maxKeys);
 
 // Miscellaneous Helper Functions
-int deleteEntry (struct hashEntry* entry, struct hashEntry* head);
+struct hashEntry* deleteEntry (struct hashEntry* entry, struct hashEntry* head);
 int insertEntry (struct hashEntry* entry, struct hashEntry* head);
-int checkPred (char* value, int op, char* opvalue);
+int checkPred (char* value, int op, char* opvalue, int type);
+void initKeys (char*** A, int r, int c);
 void freeTable (struct table* node);
 
 /**
@@ -130,14 +144,32 @@ struct config_params {
 	int username_exist;
 	///flag for password
 	int password_exist;
+	///flag for storage_policy
+	int storage_policy_exist;
+	///flag for data_directory
+	int data_directory_exist;
+	///flag for concurrency
+	int concurrency_exist;
 
 	///table name
 	char table_name[MAX_TABLES][MAX_TABLE_LEN];
 	///table index
 	int tableIndex;
+	// Column names
+	char col[MAX_TABLES][MAX_COLUMNS_PER_TABLE][MAX_COLNAME_LEN];
 
-	/// The directory where tables are stored.
-	//	char data_directory[MAX_PATH_LEN];
+	// Column types.  If the type is -1 then it is an int.  Else, the element should contain the max char length.
+	int type[MAX_TABLES][MAX_COLUMNS_PER_TABLE];
+	// Number of columns
+	int numCol[MAX_TABLES];
+
+	// Storage Policy.  If policy is 0 then data is stored in memory.  Else if the policy is 1 then store on file to the data_directory.
+	int policy;
+	/// The directory where tables are stored.  Each table will have its own separate file containing its entries in column format (each column separated by a tab and each entry separated by a new line).
+	char data_directory[MAX_PATH_LEN];
+
+	// Concurrency Method
+	int concurrency;
 };
 
 int table_exist(struct config_params *params,char *value);
@@ -208,6 +240,10 @@ char *generate_encrypted_password(const char *passwd, const char *salt);
  * @return Returns 0 if string is valid, 1 if invalid.
  */
 int my_strvalidate(char *str, int type);
+
+char* trim(char* str);
+
+int _mkdir(const char *dir);
 /**
  * @brief get the current time
  */

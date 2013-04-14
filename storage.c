@@ -32,8 +32,10 @@ int auth;
 void* storage_connect(const char *hostname, const int port)
 {
 	char buff[100];
-	sprintf(buff, "%d", port);
-	printf ("%s", buff);
+	if (hostname == NULL) {
+		errno = ERR_INVALID_PARAM;
+		return NULL;
+	}
 	// Assume port is given in the correct format.
 	if (my_strvalidate(hostname, 3)) {
 		errno=ERR_INVALID_PARAM;
@@ -66,7 +68,7 @@ void* storage_connect(const char *hostname, const int port)
 	// Connect to the server.
 	status = connect(sock, res->ai_addr, res->ai_addrlen);
 	if (status != 0){
-		errno=ERR_CONNECTION_FAIL;    //error :connection fialed
+		errno=ERR_CONNECTION_FAIL;    //error :connection failed
 		return NULL;
 	}
 	return (void*) sock;
@@ -80,6 +82,14 @@ int storage_auth(const char *username, const char *passwd, void *conn)
 {
 	if (!conn) {
 		errno = ERR_CONNECTION_FAIL;
+		return -1;
+	}
+	if (username == NULL) {
+		errno = ERR_INVALID_PARAM;
+		return -1;
+	}
+	if (passwd == NULL) {
+		errno = ERR_INVALID_PARAM;
 		return -1;
 	}
 
@@ -116,11 +126,28 @@ int storage_auth(const char *username, const char *passwd, void *conn)
  */
 int storage_get(const char *table, const char *key, struct storage_record *record, void *conn)
 {
+
+	if (conn==NULL) {
+		errno = ERR_INVALID_PARAM;
+		return -1;
+	}
 	if (!conn) {
 		errno = ERR_CONNECTION_FAIL;
 		return -1;
 	}
-	if (strlen(table)>20){
+	if (record == NULL) {
+		errno = ERR_INVALID_PARAM;
+		return -1;
+	}
+	if (table == NULL) {
+		errno = ERR_INVALID_PARAM;
+		return -1;
+	}
+	if (key == NULL) {
+		errno = ERR_INVALID_PARAM;
+		return -1;
+	}
+	if (strlen(table)>MAX_TABLE_LEN || strlen(key) > MAX_KEY_LEN){
 		errno=ERR_INVALID_PARAM;
 		return -1;
 	}
@@ -161,8 +188,14 @@ int storage_get(const char *table, const char *key, struct storage_record *recor
 				errno = ERR_KEY_NOT_FOUND;
 				return -1;
 			}
-				
-			strncpy(record->value, buf, sizeof record->value);
+
+			int j = 0;
+			j = strcspn (buf, " ");
+			record->metadata[0] = atoi(strtok(buf, " "));
+			//memset (record->metadata, atoi(strtok(buf, " ")), sizeof(record->metadata));
+			
+				buf[j] = ' ';;				
+			strncpy(record->value, buf+j+1, sizeof record->value);
 
 			// Get the time at the end of the experiment.
 			gettimeofday(&end_time,NULL);
@@ -172,8 +205,12 @@ int storage_get(const char *table, const char *key, struct storage_record *recor
 		    	double totaltime=t2-t1;
 
 
-
-			sprintf(buff,"The total time in client side is %.6lf seconds.\n",totaltime);
+			if (TESTING == 1) {
+				FILE* tFile = fopen ("test_times/get", "a");
+				fprintf (tFile, "%.6lf\n", totaltime);
+				fclose(tFile);
+			}
+			sprintf(buff,"The total time taken was %.6lf seconds.\n",totaltime);
 			if (LOGGING == 1) logger(stdout, buff);
 			else if (LOGGING == 2) logger(file, buff);
 
@@ -203,25 +240,40 @@ int storage_set(const char *table, const char *key, struct storage_record *recor
 {
 
 	char TEMP[100];
-
+	if (conn==NULL) {
+		errno = ERR_INVALID_PARAM;
+		return -1;
+	}
 	if (!conn) {
 		errno = ERR_CONNECTION_FAIL;
 		return -1;
 	}
-
-	if (strlen(key)>MAX_KEY_LEN - 1){
-		memcpy( TEMP, &key, MAX_KEY_LEN - 1);
-		TEMP[MAX_KEY_LEN - 1] = '\0';
+	if (record != NULL) {
+		if (record->value == NULL) {
+			errno = ERR_INVALID_PARAM;
+			return -1;
+		}
 	}
-	else {
-		strcpy(TEMP,key);
+	if (table == NULL) {
+		errno = ERR_INVALID_PARAM;
+		return -1;
 	}
-
+	if (key == NULL) {
+		errno = ERR_INVALID_PARAM;
+		return -1;
+	}
+	if (strlen(table)>MAX_TABLE_LEN || strlen(key) > MAX_KEY_LEN){
+		errno=ERR_INVALID_PARAM;
+		return -1;
+	}
+	if (strlen(table) < 1 || strlen(key) < 1){
+			errno=ERR_INVALID_PARAM;
+			return -1;
+	}
 	if (my_strvalidate(table, 1) ||my_strvalidate(key, 1)){
 		errno=ERR_INVALID_PARAM;
 		return -1;
 	}
-
 	struct timeval start_time, end_time;
 
 	// Remember when the experiment started.
@@ -229,6 +281,7 @@ int storage_set(const char *table, const char *key, struct storage_record *recor
 	double t1=start_time.tv_sec+(start_time.tv_usec/1000000.0);
 
 	char buff[100];
+	strcpy (TEMP, key);
 	//print statement here will tell us if it started setting the value to table
 	sprintf(buff, "Accessing table '%s' to set value to key '%s'\n",
 			table, TEMP);
@@ -240,21 +293,31 @@ int storage_set(const char *table, const char *key, struct storage_record *recor
 	// Send some data.
 	char buf[MAX_CMD_LEN];
 	memset(buf, 0, sizeof buf);
-	if (strcmp (record->value, "FILESTORE") == 0)
+	if (record == NULL)
+		snprintf(buf, sizeof buf, "SET %d %s %s %s\n", 0, table, TEMP, "NULL");
+	else if (strcmp (record->value, "FILESTORE") == 0)
 		snprintf(buf, sizeof buf, "FILE %s \n", table);
 	else
-		snprintf(buf, sizeof buf, "SET %s %s %s\n", table, TEMP, record->value);
+		snprintf(buf, sizeof buf, "SET %d %s %s %s\n", record->metadata[0], table, TEMP, record->value);
+
 
 	if(auth==1){
 //	    printf(" sending data \n");
-		if (sendall(sock, buf, strlen(buf)) == 0 && recvline(sock, buf, sizeof buf) == 0) {
-
+		if (buf != NULL && sendall(sock, buf, strlen(buf)) == 0 && recvline(sock, buf, sizeof buf) == 0) {
 			if (strcmp (buf, "-1") == 0) {
 				errno = ERR_TABLE_NOT_FOUND;
 				return -1;
 			}
 			if (strcmp (buf, "-2") == 0) {
-				errno = ERR_UNKNOWN;
+				errno = ERR_INVALID_PARAM;
+				return -1;
+			}
+			if (strcmp (buf, "-3") == 0) {
+				errno = ERR_KEY_NOT_FOUND;
+				return -1;
+			}
+			if (strcmp (buf, "-4") == 0) {
+				errno = ERR_TRANSACTION_ABORT;
 				return -1;
 			}
 			// Get the time at the end of the experiment.
@@ -265,8 +328,14 @@ int storage_set(const char *table, const char *key, struct storage_record *recor
 		    	double totaltime=t2-t1;
 
 
-			printf("The total time in client side is %.6lf seconds.\n",totaltime);
-			sprintf(buff,"The total time in client side is %.6lf seconds.\n",totaltime);
+			//printf("The total time taken was %.6lf seconds.\n",totaltime);
+//		    printf("The total time taken was %.6lf seconds.\n",totaltime);
+			if (TESTING == 1) {
+				FILE* tFile = fopen ("test_times/set", "a");
+				fprintf (tFile, "%.6lf\n", totaltime);
+				fclose(tFile);
+			}
+			sprintf(buff,"The total time taken was %.6lf seconds.\n",totaltime);
 			if (LOGGING == 1) logger(stdout, buff);
 			else if (LOGGING == 2) logger(file, buff);
 
@@ -294,8 +363,14 @@ int storage_set(const char *table, const char *key, struct storage_record *recor
 	return -1;
 }
 
+/**
+ * @brief This is used to query data into database
+ */
 int storage_query(const char *table, const char *predicates, char **keys, const int max_keys, void *conn) {
-	printf ("Request query.\n");
+	if (!conn) {
+		errno = ERR_CONNECTION_FAIL;
+		return -1;
+	}
 	struct timeval start_time, end_time;
 
 	// Remember when the experiment started.
@@ -306,7 +381,7 @@ int storage_query(const char *table, const char *predicates, char **keys, const 
 	//print statement here will tell us if it started accessing the table
 	sprintf(buff, "Accessing table '%s' to fetch keys from predicates: '%s'\n",
 			table, predicates);
-	if (LOGGING == 0) logger(stdout, buff);
+	if (LOGGING == 1) logger(stdout, buff);
 	else if (LOGGING == 2) logger(file, buff);
 	// Connection is really just a socket file descriptor.
 
@@ -316,11 +391,42 @@ int storage_query(const char *table, const char *predicates, char **keys, const 
 	// Send some data.
 	char buf[MAX_CMD_LEN];
 	memset(buf, 0, sizeof buf);
-	snprintf(buf, sizeof buf, "QUERY %s %s %d\n", table, predicates, max_keys);
+	snprintf(buf, sizeof buf, "QUERY %s %d %s\n", table, max_keys, predicates);
 	if(auth==1){
 		if (sendall(sock, buf, strlen(buf)) == 0 && recvline(sock, buf, sizeof buf) == 0) {
+			
+			if (max_keys == 0)
+				keys == NULL;
+
+			if (strcmp (buf, "-1") == 0) {
+				errno = ERR_TABLE_NOT_FOUND;
+				return -1;
+			}
+			else if (strcmp (buf, "-2") == 0) {
+				errno = ERR_INVALID_PARAM;
+				return -1;
+			}
+
+			if (strcmp (buf, "0") == 0) {
+				keys[0] = "";
+				return 0;
+			}
 
 			// Take buf and parse it for the number of keys and the list of keys and separate them into their appropriate variables (return number and set list into keys).
+			int numKeys = 0;
+			int i = 0;
+			char* arg;
+			//char* delims;
+			//strcpy (delims, " ");
+			arg = strtok (buf, " ");
+			numKeys = atoi (arg);
+			arg = strtok (NULL, " ");
+			while (arg != NULL) {
+//				printf (arg);
+				strcpy (keys[i], arg);
+				i += 1;
+				arg = strtok (NULL, " ");
+			}
 
 			// Get the time at the end of the experiment.
 			gettimeofday(&end_time,NULL);
@@ -330,13 +436,18 @@ int storage_query(const char *table, const char *predicates, char **keys, const 
 		    	double totaltime=t2-t1;
 
 
-
-			sprintf(buff,"The total time in client side is %.6lf seconds.\n",totaltime);
+//		    printf("The total time taken was %.6lf seconds.\n",totaltime);
+			if (TESTING == 1) {
+				FILE* tFile = fopen ("test_times/query", "a");
+				fprintf (tFile, "%.6lf\n", totaltime);
+				fclose(tFile);
+			}
+			sprintf(buff,"The total time taken was %.6lf seconds.\n",totaltime);
 			if (LOGGING == 1) logger(stdout, buff);
 			else if (LOGGING == 2) logger(file, buff);
 
 
-			return 0;
+			return numKeys;
 		}
 	}
 	else{

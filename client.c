@@ -15,6 +15,8 @@
 #include <sys/time.h>
 #include "file.h"
 #include "storage.c"
+#include "utils.h"
+#include "utils.c"
 
 #define MAX_KEYS 10
 
@@ -61,8 +63,16 @@ int main(int argc, char *argv[]) {
 			">Please enter your selection: ");
 	int inp;
 	int status;
+	//char keys[MAX_KEYS][MAX_KEY_LEN];
+	//char** keys;
+	//initKeys(&keys, MAX_KEYS, MAX_KEY_LEN);
 	char* keys[MAX_KEYS];
+	int i;
+	for (i = 0; i < MAX_KEYS; i++)
+		keys[i] = malloc(MAX_KEY_LEN);
+
 	struct storage_record r;
+	r.metadata[0] = 0;
 	char buff [100];
 	if (LOGGING==2){
 		time_t rawtime;
@@ -118,23 +128,24 @@ int main(int argc, char *argv[]) {
 		case 4:
 			// Issue storage_set
 			printf("Value: ");
-			scanf("%s", TEMP);
-			if (strlen(TEMP)>MAX_VALUE_LEN - 1){
-				memcpy( value, &TEMP, MAX_VALUE_LEN - 1);
-				value[MAX_VALUE_LEN - 1] = '\0';
-			}
-			else {
-				strcpy(value,TEMP);
-			}
+			scanf("%c", TEMP);
+			fgets(value, MAX_VALUE_LEN, stdin);
+//			if (strlen(TEMP)>MAX_VALUE_LEN - 1){
+//				memcpy( value, &TEMP, MAX_VALUE_LEN - 1);
+//				value[MAX_VALUE_LEN - 1] = '\0';
+//			}
+//			else {
+//				strcpy(value,TEMP);
+//			}
 			printf("Key: ");
-			scanf("%s", TEMP);
-			if (strlen(TEMP)>MAX_KEY_LEN - 1){
-				memcpy( KEY, &TEMP, MAX_KEY_LEN - 1);
-				KEY[MAX_KEY_LEN - 1] = '\0';
-			}
-			else {
-				strcpy(KEY,TEMP);
-			}
+			scanf("%s", KEY);
+//			if (strlen(TEMP)>MAX_KEY_LEN - 1){
+//				memcpy( KEY, &TEMP, MAX_KEY_LEN - 1);
+//				KEY[MAX_KEY_LEN - 1] = '\0';
+//			}
+//			else {
+//				strcpy(KEY,TEMP);
+//			}
 			printf("Table: ");
 			scanf("%s", TABLE);
 			strncpy(r.value, value, sizeof r.value);
@@ -149,6 +160,7 @@ int main(int argc, char *argv[]) {
 
 			sprintf(buff, "storage_set: successful.\n");
 			printf(buff);
+
 			break;
 		case 3:
 			// Issue storage_get
@@ -190,6 +202,7 @@ int main(int argc, char *argv[]) {
 			scanf("%s", TABLE);
 			sprintf(value, "FILESTORE");
 			strncpy(r.value, value, sizeof r.value);
+			sprintf(KEY, "EMPTY");
 			status = storage_set(TABLE, KEY, &r, conn);
 			if (status != 0) {
 				sprintf(buff, "storage_set failed. Error code: %d.\n", errno);
@@ -208,18 +221,25 @@ int main(int argc, char *argv[]) {
 			scanf("%s", TABLE);
 			printf("Predicates (column name (operator) value, ...): ");
 			// Need a function that can read a line of input.
-			//getline (stdin, TEMP);
-			//scanf("%s", TEMP);
-			if (strlen(TEMP)>MAX_VALUE_LEN - 1){
-				memcpy( value, &TEMP, MAX_VALUE_LEN - 1);
-				value[MAX_VALUE_LEN - 1] = '\0';
-			}
-			else {
-				strcpy(value,TEMP);
-			}
+			scanf ("%c", TEMP);
+			fgets(value, MAX_VALUE_LEN, stdin);
 
-			status = storage_query(TABLE, value, keys, MAX_KEYS, conn);
-			sprintf(buff, "storage_query: successful.\n");
+			status = storage_query(TABLE, value, &keys, MAX_KEYS, conn);
+			if (status < 0) {
+				sprintf(buff, "storage_set failed. Error code: %d.\n", errno);
+
+				printf(buff);
+				storage_disconnect(conn);
+				break;
+			}
+			int i = 0;
+			printf ("There were %d entries that matched the predicates.\nThese include: ", status);
+			for (i = 0; i < MAX_KEYS; i++) {
+				sprintf (buff, "%s ", keys[i]);
+				printf (buff);
+				strcpy (keys[i], "");
+			}
+			sprintf(buff, "\nstorage_query: successful.\n");
 			printf(buff);
 			break;
 //
